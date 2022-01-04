@@ -60,8 +60,8 @@ EOF
 
 data "archive_file" "lambda_file" {
   type        = "zip"
-  source_file = "../lambda/lambda.py"
-  output_path = "../lambda/lambda.zip"
+  source_file = "../Lambda_Challenge_2/lambda/lambda.py"
+  output_path = "../Lambda_Challenge_2/lambda/lambda.zip"
 }
 
 // Lambda Function 
@@ -161,4 +161,76 @@ resource "aws_cloudwatch_event_target" "LambdaTrigger" {
   rule = aws_cloudwatch_event_rule.s3event.id
 }
 
+resource "aws_dynamodb_table" "Dynamo_meta_table" {
+  name             = "Dynamo_meta_table"
+  billing_mode     = "PAY_PER_REQUEST"
+  hash_key         = "Metadata"      
+  write_capacity     = 20
+  read_capacity      = 20   
+  stream_enabled = true                     
 
+
+  attribute {
+    name = "Metadata"
+    type = "S"
+  }
+
+  replica {
+    region_name = "eu-west-2"
+    }   
+}
+
+resource "aws_iam_policy" "dynamoDB_policy" {
+  name        = "dynamoDB_policy"
+  path        = "/"
+  description = "DynamoDB policy for metadata from Lambda Function"
+
+  # Terraform's "jsonencode" function converts a                            // DynamoDB Policy for Read & Write 
+  # Terraform expression result to valid JSON syntax.
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+        "dynamodb:CreateTable",
+        "dynamodb:GetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:ListTables",
+        "dynamodb:PutItem"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role" "dynamoDB_role" {
+  name = "dynamoDB_role"
+
+  # Terraform's "jsonencode" function converts a
+  # Terraform expression result to valid JSON syntax.
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Sid    = ""
+        Principal = {
+          Service = "dynamodb.amazonaws.com"
+        }
+      },
+    ]
+  })
+
+  tags = {
+    tag-key = "tag-value"
+  }
+} 
+
+resource "aws_iam_policy_attachment" "attach_dynamodb" {
+  name       = "attach_dynamodb"
+  roles      = [aws_iam_role.dynamoDB_role.name]             
+  policy_arn = aws_iam_policy.dynamoDB_policy.arn               
+}  
